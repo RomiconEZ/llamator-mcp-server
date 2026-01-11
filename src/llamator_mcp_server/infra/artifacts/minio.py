@@ -13,16 +13,15 @@ from pathlib import PurePosixPath
 from typing import Iterable
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
-from urllib.parse import urlunparse
+
+from minio import Minio
+from minio.error import S3Error
 
 from llamator_mcp_server.domain.ports.artifacts_storage import ARTIFACTS_ARCHIVE_NAME
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactDownloadLink
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactFileRecord
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorageError
-from minio.error import S3Error
-
-from minio import Minio
 
 
 def _utc_ts(dt: datetime | None) -> float:
@@ -82,21 +81,22 @@ def _build_zip_archive(root: Path, out_file: Path) -> None:
             zf.write(file_path, arcname=arc_name)
 
 
-def _rewrite_presigned_url(url: str, public_endpoint_url: str | None) -> str:
-    if public_endpoint_url is None:
-        return url
+def _validate_endpoint_url(raw_url: str, *, field_name: str) -> ParseResult:
+    raw: str = str(raw_url).strip()
+    if not raw:
+        raise ValueError(f"{field_name} must be non-empty.")
 
-    pub: str = str(public_endpoint_url).strip()
-    if not pub:
-        return url
+    parsed: ParseResult = urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"{field_name} must be a valid http(s) URL with a host.")
 
-    parsed_pub: ParseResult = urlparse(pub)
-    if parsed_pub.scheme not in ("http", "https") or not parsed_pub.netloc:
-        raise ValueError("minio_public_endpoint_url must be a valid http(s) URL with a host.")
+    if parsed.path not in ("", "/"):
+        raise ValueError(f"{field_name} must not contain a path component.")
 
-    parsed: ParseResult = urlparse(url)
-    rewritten: ParseResult = parsed._replace(scheme=parsed_pub.scheme, netloc=parsed_pub.netloc)
-    return urlunparse(rewritten)
+    if parsed.params or parsed.query or parsed.fragment:
+        raise ValueError(f"{field_name} must not contain params/query/fragment.")
+
+    return parsed
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,39 +133,63 @@ class MinioArtifactsStorage(ArtifactsStorage):
             raise ValueError("list_max_keys must be >= 1.")
 
         endpoint_raw: str = str(cfg.endpoint_url).strip()
-        if not endpoint_raw:
-            raise ValueError("endpoint_url must be non-empty.")
-
-        parsed: ParseResult = urlparse(endpoint_raw)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("endpoint_url must be a valid http(s) URL with a host.")
+        parsed: ParseResult = _validate_endpoint_url(endpoint_raw, field_name="endpoint_url")
 
         if parsed.scheme == "https" and cfg.secure is False:
             raise ValueError("secure must be true when endpoint_url uses https.")
         if parsed.scheme == "http" and cfg.secure is True:
             raise ValueError("secure must be false when endpoint_url uses http.")
 
-        public_raw: str | None = None
+        public_parsed: ParseResult | None = None
         if cfg.public_endpoint_url is not None:
             candidate: str = str(cfg.public_endpoint_url).strip()
             if candidate:
-                parsed_pub: ParseResult = urlparse(candidate)
-                if parsed_pub.scheme not in ("http", "https") or not parsed_pub.netloc:
-                    raise ValueError("public_endpoint_url must be a valid http(s) URL with a host.")
-                public_raw = candidate
+                public_parsed = _validate_endpoint_url(candidate, field_name="public_endpoint_url")
 
-        self._public_endpoint_url: str | None = public_raw
         self._bucket: str = str(cfg.bucket).strip()
         if not self._bucket:
             raise ValueError("bucket must be non-empty.")
 
         self._list_max_keys: int = int(list_max_keys)
+
         self._client: Minio = Minio(
                 endpoint=parsed.netloc,
                 access_key=str(cfg.access_key_id),
                 secret_key=str(cfg.secret_access_key),
                 secure=bool(cfg.secure),
         )
+
+        if public_parsed is None:
+            self._presign_endpoint: str = parsed.netloc
+            self._presign_secure: bool = bool(cfg.secure)
+        else:
+            self._presign_endpoint = public_parsed.netloc
+            self._presign_secure = public_parsed.scheme == "https"
+
+        self._presign_access_key: str = str(cfg.access_key_id)
+        self._presign_secret_key: str = str(cfg.secret_access_key)
+
+        self._presign_client: Minio | None = None
+        self._presign_lock: asyncio.Lock = asyncio.Lock()
+
+    async def _get_presign_client(self) -> Minio:
+        async with self._presign_lock:
+            if self._presign_client is not None:
+                return self._presign_client
+
+            try:
+                region: str = await asyncio.to_thread(self._client._get_region, self._bucket)
+            except S3Error as e:
+                raise ArtifactsStorageError(f"MinIO get_region failed bucket={self._bucket!r}") from e
+
+            self._presign_client = Minio(
+                    endpoint=self._presign_endpoint,
+                    access_key=self._presign_access_key,
+                    secret_key=self._presign_secret_key,
+                    secure=self._presign_secure,
+                    region=region,
+            )
+            return self._presign_client
 
     async def ensure_ready(self) -> None:
         """
@@ -180,6 +204,8 @@ class MinioArtifactsStorage(ArtifactsStorage):
                 await asyncio.to_thread(self._client.make_bucket, self._bucket)
         except S3Error as e:
             raise ArtifactsStorageError(f"MinIO bucket init failed bucket={self._bucket!r}") from e
+
+        await self._get_presign_client()
 
     async def list_files(self, job_id: str) -> list[ArtifactFileRecord]:
         prefix: str = _job_prefix(job_id)
@@ -213,6 +239,7 @@ class MinioArtifactsStorage(ArtifactsStorage):
             raise ValueError("expires_seconds must be >= 1.")
 
         key: str = _object_key(job_id, rel_path)
+        presign_client: Minio = await self._get_presign_client()
 
         def _build() -> ArtifactDownloadLink:
             try:
@@ -224,7 +251,7 @@ class MinioArtifactsStorage(ArtifactsStorage):
                 raise ArtifactsStorageError(f"MinIO stat_object failed key={key!r}") from e
 
             try:
-                url: str = self._client.presigned_get_object(
+                url: str = presign_client.presigned_get_object(
                         self._bucket,
                         key,
                         expires=timedelta(seconds=expires_seconds),
@@ -232,8 +259,7 @@ class MinioArtifactsStorage(ArtifactsStorage):
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO presigned_get_object failed key={key!r}") from e
 
-            rewritten: str = _rewrite_presigned_url(url, self._public_endpoint_url)
-            return ArtifactDownloadLink(url=rewritten)
+            return ArtifactDownloadLink(url=url)
 
         return await asyncio.to_thread(_build)
 
