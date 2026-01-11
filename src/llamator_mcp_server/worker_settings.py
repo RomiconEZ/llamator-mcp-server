@@ -1,4 +1,3 @@
-# llamator-mcp-server/src/llamator_mcp_server/worker_settings.py
 from __future__ import annotations
 
 import asyncio
@@ -17,11 +16,11 @@ from llamator_mcp_server.domain.models import JobStatus
 from llamator_mcp_server.domain.models import OpenAIClientConfig
 from llamator_mcp_server.domain.models import TestPlan
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.infra.artifacts_storage import create_artifacts_storage
+from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
+from llamator_mcp_server.infra.artifacts import create_artifacts_storage
 from llamator_mcp_server.infra.job_store import JobStore
 from llamator_mcp_server.infra.llamator_runner import LlamatorRunner
 from llamator_mcp_server.infra.llamator_runner import ResolvedRun
-from llamator_mcp_server.infra.minio_artifacts_storage import MinioArtifactsStorage
 from llamator_mcp_server.infra.redis import create_redis_client
 from llamator_mcp_server.infra.redis import parse_redis_settings
 from llamator_mcp_server.utils.logging import LOGGER_NAME
@@ -256,7 +255,6 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
 
     artifacts: ArtifactsStorage = create_artifacts_storage(
             settings=settings,
-            presign_expires_seconds=15 * 60,
             list_max_keys=1000,
     )
     if isinstance(artifacts, MinioArtifactsStorage):

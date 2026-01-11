@@ -1,4 +1,3 @@
-# llamator-mcp-server/src/llamator_mcp_server/app_factory.py
 from __future__ import annotations
 
 import logging
@@ -9,13 +8,13 @@ from typing import AsyncIterator
 from arq import create_pool
 from arq.connections import ArqRedis
 from fastapi import FastAPI
-from llamator_mcp_server.api.asgi_wrappers import _ApiKeyAsgiWrapper
-from llamator_mcp_server.api.asgi_wrappers import _McpSseToJsonWrapper
-from llamator_mcp_server.api.http import build_router
-from llamator_mcp_server.api.mcp_server import build_mcp
+from llamator_mcp_server.api.http_routes import build_router
+from llamator_mcp_server.api.mcp_tools import build_mcp
+from llamator_mcp_server.api.middleware import _ApiKeyAsgiWrapper
+from llamator_mcp_server.api.middleware import _McpSseToJsonWrapper
 from llamator_mcp_server.config.settings import settings
-from llamator_mcp_server.infra.artifacts_storage import create_artifacts_storage
-from llamator_mcp_server.infra.minio_artifacts_storage import MinioArtifactsStorage
+from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
+from llamator_mcp_server.infra.artifacts import create_artifacts_storage
 from llamator_mcp_server.infra.redis import create_redis_client
 from llamator_mcp_server.infra.redis import parse_redis_settings
 from llamator_mcp_server.utils.logging import LOGGER_NAME
@@ -54,7 +53,6 @@ def create_app() -> FastAPI:
 
             artifacts = create_artifacts_storage(
                     settings=settings,
-                    presign_expires_seconds=15 * 60,
                     list_max_keys=1000,
             )
             if isinstance(artifacts, MinioArtifactsStorage):

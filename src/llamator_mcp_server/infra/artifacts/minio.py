@@ -1,4 +1,3 @@
-# llamator-mcp-server/src/llamator_mcp_server/infra/minio_artifacts_storage.py
 from __future__ import annotations
 
 import asyncio
@@ -7,6 +6,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -20,8 +20,9 @@ from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactDownloadL
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactFileRecord
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorageError
-from minio import Minio
 from minio.error import S3Error
+
+from minio import Minio
 
 
 def _utc_ts(dt: datetime | None) -> float:
@@ -55,10 +56,16 @@ def _object_key(job_id: str, rel_path: str) -> str:
 
 def _collect_files(root: Path) -> list[tuple[Path, str]]:
     out: list[tuple[Path, str]] = []
+    root_resolved: Path = root.resolve(strict=False)
     for dirpath, _, filenames in os.walk(root):
         for name in filenames:
             p: Path = Path(dirpath) / name
+            if p.is_symlink():
+                continue
             if not p.is_file():
+                continue
+            p_resolved: Path = p.resolve(strict=False)
+            if p_resolved != root_resolved and root_resolved not in p_resolved.parents:
                 continue
             rel: str = str(p.relative_to(root))
             rel_posix: str = str(PurePosixPath(Path(rel).as_posix()))
@@ -133,7 +140,21 @@ class MinioArtifactsStorage(ArtifactsStorage):
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError("endpoint_url must be a valid http(s) URL with a host.")
 
-        self._public_endpoint_url: str | None = cfg.public_endpoint_url
+        if parsed.scheme == "https" and cfg.secure is False:
+            raise ValueError("secure must be true when endpoint_url uses https.")
+        if parsed.scheme == "http" and cfg.secure is True:
+            raise ValueError("secure must be false when endpoint_url uses http.")
+
+        public_raw: str | None = None
+        if cfg.public_endpoint_url is not None:
+            candidate: str = str(cfg.public_endpoint_url).strip()
+            if candidate:
+                parsed_pub: ParseResult = urlparse(candidate)
+                if parsed_pub.scheme not in ("http", "https") or not parsed_pub.netloc:
+                    raise ValueError("public_endpoint_url must be a valid http(s) URL with a host.")
+                public_raw = candidate
+
+        self._public_endpoint_url: str | None = public_raw
         self._bucket: str = str(cfg.bucket).strip()
         if not self._bucket:
             raise ValueError("bucket must be non-empty.")
@@ -203,15 +224,15 @@ class MinioArtifactsStorage(ArtifactsStorage):
                 raise ArtifactsStorageError(f"MinIO stat_object failed key={key!r}") from e
 
             try:
-                url: str = self._client.presigned_get_object(self._bucket, key, expires=expires_seconds)
+                url: str = self._client.presigned_get_object(
+                        self._bucket,
+                        key,
+                        expires=timedelta(seconds=expires_seconds),
+                )
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO presigned_get_object failed key={key!r}") from e
 
-            try:
-                rewritten: str = _rewrite_presigned_url(url, self._public_endpoint_url)
-            except ValueError:
-                rewritten = url
-
+            rewritten: str = _rewrite_presigned_url(url, self._public_endpoint_url)
             return ArtifactDownloadLink(url=rewritten)
 
         return await asyncio.to_thread(_build)

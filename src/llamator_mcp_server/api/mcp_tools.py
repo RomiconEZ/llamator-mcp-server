@@ -1,4 +1,3 @@
-# llamator-mcp-server/src/llamator_mcp_server/api/mcp_server.py
 from __future__ import annotations
 
 import asyncio
@@ -119,8 +118,11 @@ async def _try_get_artifacts_download_url(
     :return: Presigned URL if available; otherwise None.
     """
     try:
-        link = await artifacts.get_download_link(job_id=job_id, rel_path=ARTIFACTS_ARCHIVE_NAME,
-                                                 expires_seconds=expires_seconds)
+        link = await artifacts.get_download_link(
+                job_id=job_id,
+                rel_path=ARTIFACTS_ARCHIVE_NAME,
+                expires_seconds=expires_seconds,
+        )
     except (FileNotFoundError, ValueError):
         return None
     except ArtifactsStorageError:
@@ -187,7 +189,7 @@ def build_mcp(
         artifacts_url: str | None = await _try_get_artifacts_download_url(
                 artifacts=artifacts,
                 job_id=submitted.job_id,
-                expires_seconds=15 * 60,
+                expires_seconds=settings.artifacts_presign_expires_seconds,
         )
         error_notice: str | None = info.error_notice if info.error_notice is not None else _build_error_notice(info)
 
@@ -218,7 +220,7 @@ def build_mcp(
         artifacts_url: str | None = await _try_get_artifacts_download_url(
                 artifacts=artifacts,
                 job_id=job_id,
-                expires_seconds=15 * 60,
+                expires_seconds=settings.artifacts_presign_expires_seconds,
         )
         error_notice: str | None = info.error_notice if info.error_notice is not None else _build_error_notice(info)
 

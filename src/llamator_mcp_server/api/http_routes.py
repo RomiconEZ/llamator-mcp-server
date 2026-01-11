@@ -1,7 +1,4 @@
-# llamator-mcp-server/src/llamator_mcp_server/api/http.py
 import logging
-import os
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -25,43 +22,8 @@ from llamator_mcp_server.domain.services import TestRunService
 from llamator_mcp_server.domain.services import validate_test_specs
 from llamator_mcp_server.infra.job_store import JobStore
 from redis.asyncio import Redis
-from starlette.responses import Response
 
 from .security import require_api_key
-
-
-def _safe_join(root: Path, *parts: str) -> Path:
-    """
-    Безопасно соединить корневой путь с относительным.
-
-    Генерирует абсолютный путь и проверяет, что он лежит внутри корня.
-    """
-    candidate: Path = (root.joinpath(*parts)).resolve(strict=False)
-    root_resolved: Path = root.resolve(strict=False)
-    if root_resolved not in candidate.parents and candidate != root_resolved:
-        raise ValueError("Unsafe path.")
-    return candidate
-
-
-def _list_files(root: Path) -> list[dict[str, Any]]:
-    """
-    Получить список всех файлов в заданной корневой директории.
-
-    Возвращает информацию о каждом файле: относительный путь, размер, время изменения.
-    """
-    results: list[dict[str, Any]] = []
-    for dirpath, _, filenames in os.walk(root):
-        for name in filenames:
-            p: Path = Path(dirpath) / name
-            try:
-                rel: str = str(p.relative_to(root))
-            except ValueError:
-                continue
-            st = p.stat()
-            results.append({"path": rel, "size_bytes": st.st_size, "mtime": st.st_mtime})
-    results.sort(key=lambda x: x["path"])
-    return results
-
 
 _API_KEY_SCHEME: APIKeyHeader = APIKeyHeader(
         name="X-API-Key",
@@ -101,6 +63,7 @@ def build_router(
     :param redis: Redis-клиент.
     :param arq: ARQ pool.
     :param logger: Логгер.
+    :param artifacts: Backend хранения артефактов.
     :return: Роутер FastAPI.
     """
     root_router: APIRouter = APIRouter()
@@ -135,7 +98,7 @@ def build_router(
             validate_test_specs(req.plan.basic_tests, req.plan.custom_tests)
         except ValueError as e:
             logger.warning(f"Validation error in create_run: {e}")
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         result = await service.submit(req)
         return LlamatorTestRunResponse(job_id=result.job_id, status=result.status, created_at=result.created_at)
 
@@ -150,8 +113,8 @@ def build_router(
         """
         try:
             return await store.get(job_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Not found")
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail="Not found") from e
 
     @protected_router.get("/v1/tests/runs/{job_id}/artifacts", response_model=ArtifactsListResponse)
     async def list_artifacts(job_id: str) -> ArtifactsListResponse:
@@ -164,14 +127,14 @@ def build_router(
         """
         try:
             await store.get(job_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Not found")
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail="Not found") from e
 
         try:
             files: list[ArtifactFileRecord] = await artifacts.list_files(job_id)
         except ArtifactsStorageError as e:
             logger.error(f"Artifacts list failed job_id={job_id} error={type(e).__name__}: {e}")
-            raise HTTPException(status_code=502, detail="Artifacts backend error")
+            raise HTTPException(status_code=502, detail="Artifacts backend error") from e
 
         parsed_files: list[ArtifactFileInfo] = [
             ArtifactFileInfo(path=f.path, size_bytes=f.size_bytes, mtime=f.mtime) for f in files
@@ -188,37 +151,38 @@ def build_router(
                 502: {"description": "Artifacts backend error."},
             },
     )
-    async def download_artifact(job_id: str, path: str) -> Response:
+    async def download_artifact(job_id: str, path: str) -> ArtifactDownloadResponse:
         """
         Скачать конкретный файл артефакта.
 
         :param job_id: Идентификатор задания.
         :param path: Относительный путь файла внутри артефактов задания.
-        :return: RedirectResponse (307) при S3 backend или FileResponse (200) при локальном backend.
+        :return: ArtifactDownloadResponse с временной ссылкой на скачивание.
         :raises HTTPException: Если задание/файл не найден, путь небезопасен или backend артефактов недоступен.
         :raises RuntimeError: Если backend вернул некорректную цель загрузки.
         """
         try:
             await store.get(job_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Not found")
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail="Not found") from e
 
         try:
             link: ArtifactDownloadLink = await artifacts.get_download_link(
                     job_id=job_id,
                     rel_path=path,
-                    expires_seconds=15 * 60,
+                    expires_seconds=settings.artifacts_presign_expires_seconds,
             )
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid path")
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="File not found")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="Invalid path") from e
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail="File not found") from e
         except ArtifactsStorageError as e:
-            logger.error(f"Artifacts download resolve failed job_id={job_id} path={path} error={type(e).__name__}: {e}")
-            raise HTTPException(status_code=502, detail="Artifacts backend error")
+            logger.error(
+                    f"Artifacts download resolve failed job_id={job_id} path={path} error={type(e).__name__}: {e}"
+            )
+            raise HTTPException(status_code=502, detail="Artifacts backend error") from e
 
-        payload: ArtifactDownloadResponse = ArtifactDownloadResponse(job_id=job_id, path=path, download_url=link.url)
-        return Response(content=payload.model_dump_json(), media_type="application/json")
+        return ArtifactDownloadResponse(job_id=job_id, path=path, download_url=link.url)
 
     root_router.include_router(public_router)
     root_router.include_router(protected_router)

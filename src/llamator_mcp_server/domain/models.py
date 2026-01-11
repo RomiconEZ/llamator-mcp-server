@@ -1,4 +1,3 @@
-# llamator-mcp-server/src/llamator_mcp_server/domain/models.py
 from __future__ import annotations
 
 from datetime import datetime
@@ -165,13 +164,20 @@ class OpenAIClientConfig(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
-    kind: Literal[ClientKind.OPENAI] = Field(default=ClientKind.OPENAI)
+    kind: ClientKind = Field(default=ClientKind.OPENAI)
     api_key: str | None = Field(default=None, min_length=1)
     base_url: HttpUrl
     model: str = Field(min_length=1, max_length=300)
     temperature: float | None = None
     system_prompts: tuple[str, ...] | None = None
     model_description: str | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def _validate_kind(cls, v: ClientKind) -> ClientKind:
+        if v != ClientKind.OPENAI:
+            raise ValueError("Only 'openai' client kind is supported.")
+        return v
 
     @field_validator("temperature")
     @classmethod
