@@ -265,10 +265,13 @@ def test_download_any_artifact_after_job_completion(
         return
 
     download_path: str = _artifact_download_path(created.job_id, first_path)
-    resp_dl: ClientResponse = http_client.get(download_path, headers=http_headers)
+
+    # The HTTP API contract for artifact downloads is a direct JSON response (no 3xx redirects).
+    resp_dl: ClientResponse = http_client.get_no_redirect(download_path, headers=http_headers)
 
     reporter.http_call("http.download_artifact.after_completion", "GET", download_path, resp_dl)
     assert resp_dl.status == 200, f"download_artifact status={resp_dl.status} body={resp_dl.body[:200]!r}"
+    assert "location" not in resp_dl.headers, f"unexpected redirect location={resp_dl.headers.get('location')!r}"
 
     payload_any2: Any = resp_dl.json()
     reporter.http_json("http.download_artifact.after_completion.response", payload_any2)

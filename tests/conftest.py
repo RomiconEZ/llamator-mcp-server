@@ -277,18 +277,18 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
     urllib handler that disables automatic redirect following.
 
-    This is used by integration tests to capture 307 Location header
-    for S3 presigned downloads without downloading the file.
+    This is used by integration tests to capture 3xx Location header
+    when validating that an endpoint does not redirect.
     """
 
     def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: Any,
-        code: int,
-        msg: str,
-        headers: Any,
-        newurl: str,
+            self,
+            req: urllib.request.Request,
+            fp: Any,
+            code: int,
+            msg: str,
+            headers: Any,
+            newurl: str,
     ) -> Any:  # noqa: ANN401
         return None
 
@@ -324,7 +324,8 @@ class HttpJsonClient:
         """
         Send GET request without following redirects.
 
-        Useful for endpoints that return 307 redirect to a presigned URL (S3 backend).
+        Useful for validating that an endpoint returns a direct JSON response and does not
+        emit unexpected 3xx redirects (e.g. when returning presigned download URLs).
 
         :param path: Path part, e.g. /v1/tests/runs/{job_id}/artifacts/{path}
         :param headers: Request headers.
@@ -696,13 +697,13 @@ def _load_test_config() -> IntegrationTestConfig:
     mcp_protocol_version: str = _get_env_required(f"{ENV_PREFIX}MCP_PROTOCOL_VERSION")
 
     return IntegrationTestConfig(
-        base_url=base_url,
-        mcp_path=mcp_path,
-        api_key=api_key,
-        http_timeout_s=http_timeout_s,
-        ready_timeout_s=ready_timeout_s,
-        ready_interval_s=ready_interval_s,
-        mcp_protocol_version=mcp_protocol_version,
+            base_url=base_url,
+            mcp_path=mcp_path,
+            api_key=api_key,
+            http_timeout_s=http_timeout_s,
+            ready_timeout_s=ready_timeout_s,
+            ready_interval_s=ready_interval_s,
+            mcp_protocol_version=mcp_protocol_version,
     )
 
 
@@ -720,13 +721,13 @@ def _load_run_request_env_config() -> RunRequestEnvConfig:
     enable_reports: bool = _get_env_bool(f"{ENV_PREFIX}ENABLE_REPORTS")
 
     return RunRequestEnvConfig(
-        tested_kind=tested_kind,  # type: ignore[arg-type]
-        tested_base_url=tested_base_url,
-        tested_model=tested_model,
-        tested_api_key=tested_api_key,
-        preset_name=preset_name,
-        num_threads=num_threads,
-        enable_reports=enable_reports,
+            tested_kind=tested_kind,  # type: ignore[arg-type]
+            tested_base_url=tested_base_url,
+            tested_model=tested_model,
+            tested_api_key=tested_api_key,
+            preset_name=preset_name,
+            num_threads=num_threads,
+            enable_reports=enable_reports,
     )
 
 
@@ -838,9 +839,9 @@ def http_headers(it_config: IntegrationTestConfig) -> dict[str, str]:
 
 @pytest.fixture()
 def mcp_client(
-    http_client: HttpJsonClient,
-    it_config: IntegrationTestConfig,
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        it_config: IntegrationTestConfig,
+        reporter: ResponseReporter,
 ) -> McpJsonRpcClient:
     """
     Provide MCP JSON-RPC client.
