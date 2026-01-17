@@ -2,8 +2,7 @@
 
 MCP server for llamator: automate LLM red teaming workflows
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![GitHub Repo stars](https://img.shields.io/github/stars/LLAMATOR-Core/llamator-mcp-server)](https://github.com/LLAMATOR-Core/llamator-mcp-server/stargazers)
+[![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC_BY--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
 [![Chat](https://img.shields.io/badge/chat-gray.svg?logo=telegram)](https://t.me/llamator)
 
 ## Overview
@@ -12,7 +11,8 @@ This repository provides a production-oriented service wrapper around **LLAMATOR
 It exposes two integration surfaces:
 
 - **HTTP API (FastAPI)** for job submission, job state retrieval, and artifacts access.
-- **MCP server (Streamable HTTP transport)** for agent/tooling integrations, enabling LLAMATOR runs to be invoked as tools.
+- **MCP server (Streamable HTTP transport)** for agent/tooling integrations, enabling LLAMATOR runs to be invoked as
+  tools.
 
 Execution is asynchronous and is orchestrated via **ARQ + Redis**. Artifacts are uploaded to **MinIO** and are retrieved
 through presigned URLs (returned as JSON; the API does not redirect).
@@ -21,12 +21,12 @@ through presigned URLs (returned as JSON; the API does not redirect).
 
 - Asynchronous test runs with durable state persisted in Redis.
 - Request persistence with secret redaction:
-  - API keys are not stored in plaintext.
-  - Stored payloads include only boolean markers (e.g. `api_key_present`).
+    - API keys are not stored in plaintext.
+    - Stored payloads include only boolean markers (e.g. `api_key_present`).
 - Artifacts lifecycle management:
-  - Worker creates job-local artifacts under `LLAMATOR_MCP_ARTIFACTS_ROOT/<job_id>/...`.
-  - Artifacts are uploaded to MinIO as an archive named `artifacts.zip`.
-  - HTTP API can list available objects under a job prefix and resolve presigned download links.
+    - Worker creates job-local artifacts under `LLAMATOR_MCP_ARTIFACTS_ROOT/<job_id>/...`.
+    - Artifacts are uploaded to MinIO as an archive named `artifacts.zip`.
+    - HTTP API can list available objects under a job prefix and resolve presigned download links.
 - Optional API-key protection for both HTTP and MCP interfaces via `X-API-Key`.
 - OpenAPI schema (Swagger UI) with API-key authorization support.
 - Prometheus metrics exposed at `/metrics`.
@@ -34,6 +34,7 @@ through presigned URLs (returned as JSON; the API does not redirect).
 ## Deployment (Docker Compose)
 
 Requirements:
+
 - Docker
 - Docker Compose
 
@@ -44,6 +45,7 @@ docker compose up --build
 ```
 
 Default service endpoints:
+
 - HTTP API: `http://localhost:8000`
 - MinIO S3 endpoint: `http://localhost:9000`
 - MinIO console: `http://localhost:9001`
@@ -83,6 +85,7 @@ curl -sS -X POST "http://localhost:8000/v1/tests/runs"   -H "Content-Type: appli
 ```
 
 The response contains:
+
 - `job_id` (uuid4 hex, 32 characters)
 - `status` (`queued | running | succeeded | failed`)
 - `created_at` (UTC timestamp)
@@ -114,6 +117,7 @@ The download endpoint returns a JSON payload containing `download_url` and does 
 The MCP server is mounted into the FastAPI application (default mount path: `/mcp`) and uses Streamable HTTP transport.
 
 Exposed tools:
+
 - `create_llamator_run`: submits a job, waits for completion, returns aggregated metrics and (if available) a presigned
   URL for `artifacts.zip`.
 - `get_llamator_run`: returns aggregated metrics for a finished job and the optional artifacts archive URL.
@@ -157,7 +161,7 @@ pytest -q
 
 ## License 📜
 
-This project is licensed under the terms of the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0
-International** license. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the terms of the **Creative Commons Attribution-ShareAlike 4.0 International** license.
+See the [LICENSE](LICENSE) file for details.
 
-[![Creative Commons License](https://i.creativecommons.org/l/by-nc-sa/4.0/88x31.png)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![Creative Commons License](https://i.creativecommons.org/l/by-sa/4.0/88x31.png)](https://creativecommons.org/licenses/by-sa/4.0/)

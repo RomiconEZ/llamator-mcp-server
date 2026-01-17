@@ -2,7 +2,7 @@
 name = "llamator-mcp-server"
 version = "0.3.0"
 description = "MCP server for LLAMATOR with ARQ/Redis task broker"
-authors = ["LLAMATOR Core Team"]
+authors = ["Roman Neronov, Nikita Ivanov, Timur Nizamov"]
 readme = "README.md"
 packages = [{ include = "llamator_mcp_server", from = "src" }]
 
