@@ -3,12 +3,16 @@ from __future__ import annotations
 import importlib
 import inspect
 import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from typing import Iterator
 
 import llamator
-from llamator_mcp_server.domain.models import OpenAIClientConfig, TestParameter, TestPlan
+from llamator_mcp_server.domain.models import OpenAIClientConfig
+from llamator_mcp_server.domain.models import TestParameter
+from llamator_mcp_server.domain.models import TestPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +122,120 @@ def _resolve_custom_tests(plan: TestPlan) -> list[tuple[type, dict[str, Any]]] |
     return tests or None
 
 
+@dataclass(frozen=True, slots=True)
+class _RootLoggerSnapshot:
+    """
+    Immutable snapshot of root logger configuration.
+
+    :param level: Root logger level.
+    :param handlers: Root logger handlers list.
+    :param filters: Root logger filters list.
+    :param disabled: Root logger disabled flag.
+    """
+
+    level: int
+    handlers: tuple[logging.Handler, ...]
+    filters: tuple[logging.Filter, ...]
+    disabled: bool
+
+
+def _snapshot_root_logger(root: logging.Logger) -> _RootLoggerSnapshot:
+    """
+    Capture current root logger configuration.
+
+    :param root: Root logger.
+    :return: _RootLoggerSnapshot.
+    """
+    return _RootLoggerSnapshot(
+        level=int(root.level),
+        handlers=tuple(root.handlers),
+        filters=tuple(root.filters),
+        disabled=bool(root.disabled),
+    )
+
+
+def _clear_root_logger(root: logging.Logger) -> None:
+    """
+    Remove all handlers and filters from root logger.
+
+    :param root: Root logger.
+    :return: None.
+    """
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    for f in list(root.filters):
+        root.removeFilter(f)
+    root.setLevel(logging.NOTSET)
+    root.disabled = False
+
+
+def _restore_root_logger(root: logging.Logger, snap: _RootLoggerSnapshot) -> None:
+    """
+    Restore root logger configuration from a snapshot.
+
+    :param root: Root logger.
+    :param snap: Snapshot.
+    :return: None.
+    """
+    _clear_root_logger(root)
+
+    root.setLevel(int(snap.level))
+    root.disabled = bool(snap.disabled)
+
+    for f in snap.filters:
+        root.addFilter(f)
+
+    for h in snap.handlers:
+        root.addHandler(h)
+
+
+def _close_handlers(handlers: tuple[logging.Handler, ...]) -> None:
+    """
+    Flush and close handlers safely.
+
+    :param handlers: Handlers tuple.
+    :return: None.
+    """
+    for h in handlers:
+        try:
+            h.flush()
+        except Exception:
+            pass
+        try:
+            h.close()
+        except Exception:
+            pass
+
+
+@contextmanager
+def _llamator_root_logging_scope() -> Iterator[None]:
+    """
+    Provide a temporary "clean" root logger scope for LLAMATOR execution.
+
+    LLAMATOR and its dependencies may configure logging via logging.basicConfig
+    and expect the root logger to have no pre-existing handlers. In production,
+    the root logger is often configured by the HTTP server / worker startup,
+    which makes basicConfig a no-op and leads to missing logs in LLAMATOR artifacts.
+
+    This context manager:
+    - snapshots root logger config,
+    - clears root handlers/filters before LLAMATOR runs,
+    - after completion, closes any handlers added by LLAMATOR and restores the snapshot.
+
+    :return: Iterator[None].
+    """
+    root: logging.Logger = logging.getLogger()
+    snap: _RootLoggerSnapshot = _snapshot_root_logger(root)
+    _clear_root_logger(root)
+    try:
+        yield
+    finally:
+        added_handlers: tuple[logging.Handler, ...] = tuple(root.handlers)
+        _clear_root_logger(root)
+        _close_handlers(added_handlers)
+        _restore_root_logger(root, snap)
+
+
 class LlamatorRunner:
     """
     LLAMATOR tests executor (called by the worker).
@@ -148,12 +266,13 @@ class LlamatorRunner:
         num_threads: int | None = resolved.plan.num_threads
         self._logger.info(f"Starting LLAMATOR run for job_id={resolved.job_id}")
 
-        return llamator.start_testing(
-            attack_model=attack_model,
-            tested_model=tested_model,
-            config=resolved.run_config,
-            judge_model=judge_model,
-            num_threads=num_threads,
-            basic_tests=basic_tests,
-            custom_tests=custom_tests,
-        )
+        with _llamator_root_logging_scope():
+            return llamator.start_testing(
+                attack_model=attack_model,
+                tested_model=tested_model,
+                config=resolved.run_config,
+                judge_model=judge_model,
+                num_threads=num_threads,
+                basic_tests=basic_tests,
+                custom_tests=custom_tests,
+            )

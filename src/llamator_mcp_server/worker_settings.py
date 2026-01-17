@@ -5,21 +5,30 @@ import logging
 import shutil
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from datetime import datetime
+from datetime import timezone
+from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from arq.connections import RedisSettings
-from pydantic import TypeAdapter
-
-from llamator_mcp_server.config.settings import Settings, settings
-from llamator_mcp_server.domain.models import JobStatus, LlamatorRunConfig, OpenAIClientConfig, TestPlan
+from llamator_mcp_server.config.settings import Settings
+from llamator_mcp_server.config.settings import settings
+from llamator_mcp_server.domain.models import JobStatus
+from llamator_mcp_server.domain.models import LlamatorRunConfig
+from llamator_mcp_server.domain.models import OpenAIClientConfig
+from llamator_mcp_server.domain.models import TestPlan
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage, create_artifacts_storage
+from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
+from llamator_mcp_server.infra.artifacts import create_artifacts_storage
 from llamator_mcp_server.infra.job_store import JobStore
-from llamator_mcp_server.infra.llamator_runner import LlamatorRunner, ResolvedRun
-from llamator_mcp_server.infra.redis import create_redis_client, parse_redis_settings
-from llamator_mcp_server.utils.logging import LOGGER_NAME, configure_logging
+from llamator_mcp_server.infra.llamator_runner import LlamatorRunner
+from llamator_mcp_server.infra.llamator_runner import ResolvedRun
+from llamator_mcp_server.infra.redis import create_redis_client
+from llamator_mcp_server.infra.redis import parse_redis_settings
+from llamator_mcp_server.utils.logging import LOGGER_NAME
+from llamator_mcp_server.utils.logging import configure_logging
+from pydantic import TypeAdapter
 
 
 def _utcnow() -> datetime:
@@ -128,9 +137,8 @@ def _resolve_local_artifacts_dir(settings_obj: Settings, job_id: str, user_cfg: 
     return candidate
 
 
-def _merge_llamator_run_config(
-    settings_obj: Settings, job_id: str, user_cfg: LlamatorRunConfig | None
-) -> dict[str, Any]:
+def _merge_llamator_run_config(settings_obj: Settings, job_id: str, user_cfg: LlamatorRunConfig | None) -> dict[
+    str, Any]:
     """
     Merge user run configuration with defaults and resolve local artifacts path.
 
@@ -149,9 +157,7 @@ def _merge_llamator_run_config(
     )
     debug_level: int = 1 if user_cfg is None or user_cfg.debug_level is None else int(user_cfg.debug_level)
     report_language: str = (
-        settings_obj.report_language
-        if user_cfg is None or user_cfg.report_language is None
-        else user_cfg.report_language
+        settings_obj.report_language if user_cfg is None or user_cfg.report_language is None else user_cfg.report_language
     )
 
     effective["enable_logging"] = enable_logging
@@ -239,9 +245,10 @@ class _ExecutionContext:
     logger: logging.Logger
     store: JobStore
     artifacts: ArtifactsStorage
+    llamator_lock: asyncio.Lock
 
     @classmethod
-    def from_ctx(cls, ctx: dict[str, Any]) -> _ExecutionContext:
+    def from_ctx(cls, ctx: dict[str, Any]) -> "_ExecutionContext":
         """
         Build _ExecutionContext from ARQ ctx dict.
 
@@ -253,6 +260,7 @@ class _ExecutionContext:
             logger=ctx["logger"],
             store=ctx["store"],
             artifacts=ctx["artifacts_storage"],
+            llamator_lock=ctx["llamator_lock"],
         )
 
 
@@ -270,7 +278,7 @@ class _RunInputs:
     user_run_config: LlamatorRunConfig | None
 
     @classmethod
-    def from_payload(cls, job_id: str, payload: dict[str, Any]) -> _RunInputs:
+    def from_payload(cls, job_id: str, payload: dict[str, Any]) -> "_RunInputs":
         """
         Parse and validate inputs from a job payload.
 
@@ -325,14 +333,14 @@ class _ArtifactsLifecycle:
     """
 
     def __init__(
-        self,
-        logger: logging.Logger,
-        artifacts: ArtifactsStorage,
-        job_id: str,
-        local_root: Path,
-        local_job_root: Path,
-        upload_max_retries: int,
-        upload_retry_delay_seconds: float,
+            self,
+            logger: logging.Logger,
+            artifacts: ArtifactsStorage,
+            job_id: str,
+            local_root: Path,
+            local_job_root: Path,
+            upload_max_retries: int,
+            upload_retry_delay_seconds: float,
     ) -> None:
         self._logger: logging.Logger = logger
         self._artifacts: ArtifactsStorage = artifacts
@@ -406,6 +414,7 @@ class _JobExecutor:
         self._logger: logging.Logger = exec_ctx.logger
         self._store: JobStore = exec_ctx.store
         self._artifacts: ArtifactsStorage = exec_ctx.artifacts
+        self._llamator_lock: asyncio.Lock = exec_ctx.llamator_lock
 
     async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
@@ -440,7 +449,10 @@ class _JobExecutor:
             )
 
             runner: LlamatorRunner = LlamatorRunner(logger=self._logger)
-            aggregated_raw: Any = await asyncio.to_thread(runner.run, resolved)
+
+            async with self._llamator_lock:
+                aggregated_raw: Any = await asyncio.to_thread(runner.run, resolved)
+
             aggregated: dict[str, dict[str, int]] = _validate_start_testing_result(aggregated_raw)
 
             if _is_empty_aggregated_result(aggregated):
@@ -501,6 +513,7 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
     ctx["redis_client"] = redis
     ctx["store"] = JobStore(redis=redis, ttl_seconds=settings.job_ttl_seconds)
     ctx["artifacts_storage"] = artifacts
+    ctx["llamator_lock"] = asyncio.Lock()
 
     logger.info("ARQ worker startup completed status=ready")
 
