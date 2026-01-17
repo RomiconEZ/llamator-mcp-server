@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from typing import Callable
+from typing import Any, Callable
 
 
 class _ApiKeyAsgiWrapper:
@@ -42,14 +41,14 @@ class _ApiKeyAsgiWrapper:
         if header_map.get("x-api-key") != expected:
             body: bytes = b'{"detail":"Unauthorized"}'
             await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 401,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (b"content-length", str(len(body)).encode("ascii")),
-                        ],
-                    }
+                {
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(body)).encode("ascii")),
+                    ],
+                }
             )
             await send({"type": "http.response.body", "body": body})
             return
@@ -225,10 +224,10 @@ class _McpSseToJsonWrapper:
         new_headers.append((b"content-length", str(len(extracted)).encode("ascii")))
 
         await send(
-                {
-                    "type": "http.response.start",
-                    "status": int(captured_start.get("status", 200)),
-                    "headers": new_headers,
-                }
+            {
+                "type": "http.response.start",
+                "status": int(captured_start.get("status", 200)),
+                "headers": new_headers,
+            }
         )
         await send({"type": "http.response.body", "body": extracted, "more_body": False})

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import logging
-from contextlib import AsyncExitStack
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import AsyncIterator
 
 from arq import create_pool
@@ -13,16 +12,12 @@ from redis.asyncio import Redis
 
 from llamator_mcp_server.api.http_routes import build_router
 from llamator_mcp_server.api.mcp_tools import build_mcp
-from llamator_mcp_server.api.middleware import _ApiKeyAsgiWrapper
-from llamator_mcp_server.api.middleware import _McpSseToJsonWrapper
+from llamator_mcp_server.api.middleware import _ApiKeyAsgiWrapper, _McpSseToJsonWrapper
 from llamator_mcp_server.api.openapi import build_openapi_schema
 from llamator_mcp_server.config.settings import settings
-from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
-from llamator_mcp_server.infra.artifacts import create_artifacts_storage
-from llamator_mcp_server.infra.redis import create_redis_client
-from llamator_mcp_server.infra.redis import parse_redis_settings
-from llamator_mcp_server.utils.logging import LOGGER_NAME
-from llamator_mcp_server.utils.logging import configure_logging
+from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage, create_artifacts_storage
+from llamator_mcp_server.infra.redis import create_redis_client, parse_redis_settings
+from llamator_mcp_server.utils.logging import LOGGER_NAME, configure_logging
 
 
 async def _close_arq_pool(arq_pool: ArqRedis) -> None:
@@ -66,14 +61,14 @@ def create_app() -> FastAPI:
             stack.push_async_callback(_close_arq_pool, arq_pool)
 
             artifacts = create_artifacts_storage(
-                    settings=settings,
-                    list_max_keys=1000,
+                settings=settings,
+                list_max_keys=1000,
             )
             if isinstance(artifacts, MinioArtifactsStorage):
                 await artifacts.ensure_ready()
 
             logger.info(
-                    f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
+                f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
             )
 
             app.state.settings = settings
@@ -96,10 +91,10 @@ def create_app() -> FastAPI:
             yield
 
     app = FastAPI(
-            title="llamator-mcp-server",
-            version="0.3.0",
-            lifespan=lifespan,
-            swagger_ui_parameters={"persistAuthorization": True},
+        title="llamator-mcp-server",
+        version="0.3.0",
+        lifespan=lifespan,
+        swagger_ui_parameters={"persistAuthorization": True},
     )
 
     def custom_openapi() -> dict[str, object]:
@@ -108,8 +103,9 @@ def create_app() -> FastAPI:
 
         :return: OpenAPI schema dict.
         """
-        return build_openapi_schema(app, scheme_name="McpApiKey",
-                                    api_key_header_name="X-API-Key")  # type: ignore[return-value]
+        return build_openapi_schema(
+            app, scheme_name="McpApiKey", api_key_header_name="X-API-Key"
+        )  # type: ignore[return-value]
 
     app.openapi = custom_openapi  # type: ignore[assignment]
 

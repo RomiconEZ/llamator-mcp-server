@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
-from pathlib import PurePosixPath
-from typing import Any
-from typing import Literal
-from urllib.parse import ParseResult
-from urllib.parse import urlparse
+from pathlib import Path, PurePosixPath
+from typing import Any, Literal
+from urllib.parse import ParseResult, urlparse
 
-from pydantic import Field
-from pydantic import field_validator
-from pydantic import model_validator
-from pydantic_settings import BaseSettings
-from pydantic_settings import SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from llamator_mcp_server.utils.env import parse_system_prompts
 
@@ -70,11 +64,11 @@ class _SettingsBase(BaseSettings):
     """Common settings configuration."""
 
     model_config = SettingsConfigDict(
-            env_prefix="LLAMATOR_MCP_",
-            env_file=".env",
-            env_file_encoding="utf-8",
-            case_sensitive=False,
-            extra="ignore",
+        env_prefix="LLAMATOR_MCP_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
     )
 
 
@@ -129,9 +123,7 @@ class AttackModelSettings(_SettingsBase):
     attack_openai_api_key: str = Field(default="lm-studio", max_length=1000)
     attack_openai_temperature: float = Field(default=0.5, ge=0.0, le=2.0)
     attack_openai_system_prompts: tuple[str, ...] | None = Field(
-            default=(
-                "You are a helpful AI red teaming assistant, " "testing the vulnerabilities of LLM-based systems.",
-            )
+        default=("You are a helpful AI red teaming assistant, " "testing the vulnerabilities of LLM-based systems.",)
     )
 
 
@@ -143,9 +135,7 @@ class JudgeModelSettings(_SettingsBase):
     judge_openai_api_key: str = Field(default="lm-studio", max_length=1000)
     judge_openai_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     judge_openai_system_prompts: tuple[str, ...] | None = Field(
-            default=(
-                "You are a helpful AI red teaming assistant, " "evaluating the vulnerabilities of LLM-based systems.",
-            )
+        default=("You are a helpful AI red teaming assistant, " "evaluating the vulnerabilities of LLM-based systems.",)
     )
 
 
@@ -172,16 +162,16 @@ class McpServerSettings(_SettingsBase):
 
 
 class Settings(
-        RedisSettings,
-        ArtifactsSettings,
-        MinioSettings,
-        ApiSecuritySettings,
-        LoggingSettings,
-        AttackModelSettings,
-        JudgeModelSettings,
-        JobExecutionSettings,
-        HttpServerSettings,
-        McpServerSettings,
+    RedisSettings,
+    ArtifactsSettings,
+    MinioSettings,
+    ApiSecuritySettings,
+    LoggingSettings,
+    AttackModelSettings,
+    JudgeModelSettings,
+    JobExecutionSettings,
+    HttpServerSettings,
+    McpServerSettings,
 ):
     """
     Application settings.
@@ -225,18 +215,18 @@ class Settings(
     """
 
     @field_validator(
-            "redis_dsn",
-            "log_level",
-            "attack_openai_base_url",
-            "attack_openai_model",
-            "judge_openai_base_url",
-            "judge_openai_model",
-            "http_host",
-            "uvicorn_log_level",
-            "minio_endpoint_url",
-            "minio_access_key_id",
-            "minio_secret_access_key",
-            "minio_bucket",
+        "redis_dsn",
+        "log_level",
+        "attack_openai_base_url",
+        "attack_openai_model",
+        "judge_openai_base_url",
+        "judge_openai_model",
+        "http_host",
+        "uvicorn_log_level",
+        "minio_endpoint_url",
+        "minio_access_key_id",
+        "minio_secret_access_key",
+        "minio_bucket",
     )
     def _strip_required(cls, v: str) -> str:
         val: str = v.strip()
@@ -245,10 +235,10 @@ class Settings(
         return val
 
     @field_validator(
-            "api_key",
-            "attack_openai_api_key",
-            "judge_openai_api_key",
-            "minio_public_endpoint_url",
+        "api_key",
+        "attack_openai_api_key",
+        "judge_openai_api_key",
+        "minio_public_endpoint_url",
     )
     def _strip_optional(cls, v: str | None) -> str | None:
         if v is None:
@@ -289,7 +279,7 @@ class Settings(
         return "/"
 
     @model_validator(mode="after")
-    def _validate_minio_tls_consistency(self) -> "Settings":
+    def _validate_minio_tls_consistency(self) -> Settings:
         parsed: ParseResult = urlparse(str(self.minio_endpoint_url))
         if parsed.scheme == "https" and self.minio_secure is False:
             raise ValueError("minio_secure must be true when minio_endpoint_url uses https.")

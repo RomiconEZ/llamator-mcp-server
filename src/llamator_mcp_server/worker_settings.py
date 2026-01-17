@@ -5,31 +5,21 @@ import logging
 import shutil
 import time
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone
-from pathlib import Path
-from pathlib import PurePosixPath
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from arq.connections import RedisSettings
 from pydantic import TypeAdapter
 
-from llamator_mcp_server.config.settings import Settings
-from llamator_mcp_server.config.settings import settings
-from llamator_mcp_server.domain.models import JobStatus
-from llamator_mcp_server.domain.models import LlamatorRunConfig
-from llamator_mcp_server.domain.models import OpenAIClientConfig
-from llamator_mcp_server.domain.models import TestPlan
+from llamator_mcp_server.config.settings import Settings, settings
+from llamator_mcp_server.domain.models import JobStatus, LlamatorRunConfig, OpenAIClientConfig, TestPlan
 from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
-from llamator_mcp_server.infra.artifacts import create_artifacts_storage
+from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage, create_artifacts_storage
 from llamator_mcp_server.infra.job_store import JobStore
-from llamator_mcp_server.infra.llamator_runner import LlamatorRunner
-from llamator_mcp_server.infra.llamator_runner import ResolvedRun
-from llamator_mcp_server.infra.redis import create_redis_client
-from llamator_mcp_server.infra.redis import parse_redis_settings
-from llamator_mcp_server.utils.logging import LOGGER_NAME
-from llamator_mcp_server.utils.logging import configure_logging
+from llamator_mcp_server.infra.llamator_runner import LlamatorRunner, ResolvedRun
+from llamator_mcp_server.infra.redis import create_redis_client, parse_redis_settings
+from llamator_mcp_server.utils.logging import LOGGER_NAME, configure_logging
 
 
 def _utcnow() -> datetime:
@@ -138,8 +128,9 @@ def _resolve_local_artifacts_dir(settings_obj: Settings, job_id: str, user_cfg: 
     return candidate
 
 
-def _merge_llamator_run_config(settings_obj: Settings, job_id: str, user_cfg: LlamatorRunConfig | None) -> dict[
-    str, Any]:
+def _merge_llamator_run_config(
+    settings_obj: Settings, job_id: str, user_cfg: LlamatorRunConfig | None
+) -> dict[str, Any]:
     """
     Merge user run configuration with defaults and resolve local artifacts path.
 
@@ -158,7 +149,9 @@ def _merge_llamator_run_config(settings_obj: Settings, job_id: str, user_cfg: Ll
     )
     debug_level: int = 1 if user_cfg is None or user_cfg.debug_level is None else int(user_cfg.debug_level)
     report_language: str = (
-        settings_obj.report_language if user_cfg is None or user_cfg.report_language is None else user_cfg.report_language
+        settings_obj.report_language
+        if user_cfg is None or user_cfg.report_language is None
+        else user_cfg.report_language
     )
 
     effective["enable_logging"] = enable_logging
@@ -248,7 +241,7 @@ class _ExecutionContext:
     artifacts: ArtifactsStorage
 
     @classmethod
-    def from_ctx(cls, ctx: dict[str, Any]) -> "_ExecutionContext":
+    def from_ctx(cls, ctx: dict[str, Any]) -> _ExecutionContext:
         """
         Build _ExecutionContext from ARQ ctx dict.
 
@@ -256,10 +249,10 @@ class _ExecutionContext:
         :return: _ExecutionContext.
         """
         return cls(
-                settings=ctx["settings"],
-                logger=ctx["logger"],
-                store=ctx["store"],
-                artifacts=ctx["artifacts_storage"],
+            settings=ctx["settings"],
+            logger=ctx["logger"],
+            store=ctx["store"],
+            artifacts=ctx["artifacts_storage"],
         )
 
 
@@ -277,7 +270,7 @@ class _RunInputs:
     user_run_config: LlamatorRunConfig | None
 
     @classmethod
-    def from_payload(cls, job_id: str, payload: dict[str, Any]) -> "_RunInputs":
+    def from_payload(cls, job_id: str, payload: dict[str, Any]) -> _RunInputs:
         """
         Parse and validate inputs from a job payload.
 
@@ -293,12 +286,12 @@ class _RunInputs:
         user_run_config: LlamatorRunConfig | None = _try_parse_run_config(payload.get("run_config"))
 
         return cls(
-                job_id=job_id,
-                attack_model=attack_model,
-                tested_model=tested_model,
-                judge_model=judge_model,
-                plan=plan,
-                user_run_config=user_run_config,
+            job_id=job_id,
+            attack_model=attack_model,
+            tested_model=tested_model,
+            judge_model=judge_model,
+            plan=plan,
+            user_run_config=user_run_config,
         )
 
     def to_resolved_run(self, settings_obj: Settings) -> ResolvedRun:
@@ -309,20 +302,20 @@ class _RunInputs:
         :return: ResolvedRun.
         """
         run_config: dict[str, Any] = _merge_llamator_run_config(
-                settings_obj=settings_obj,
-                job_id=self.job_id,
-                user_cfg=self.user_run_config,
+            settings_obj=settings_obj,
+            job_id=self.job_id,
+            user_cfg=self.user_run_config,
         )
         artifacts_root: Path = Path(str(run_config["artifacts_path"])).resolve(strict=False)
 
         return ResolvedRun(
-                job_id=self.job_id,
-                attack_model=self.attack_model,
-                tested_model=self.tested_model,
-                judge_model=self.judge_model,
-                plan=self.plan,
-                run_config=run_config,
-                artifacts_root=artifacts_root,
+            job_id=self.job_id,
+            attack_model=self.attack_model,
+            tested_model=self.tested_model,
+            judge_model=self.judge_model,
+            plan=self.plan,
+            run_config=run_config,
+            artifacts_root=artifacts_root,
         )
 
 
@@ -332,14 +325,14 @@ class _ArtifactsLifecycle:
     """
 
     def __init__(
-            self,
-            logger: logging.Logger,
-            artifacts: ArtifactsStorage,
-            job_id: str,
-            local_root: Path,
-            local_job_root: Path,
-            upload_max_retries: int,
-            upload_retry_delay_seconds: float,
+        self,
+        logger: logging.Logger,
+        artifacts: ArtifactsStorage,
+        job_id: str,
+        local_root: Path,
+        local_job_root: Path,
+        upload_max_retries: int,
+        upload_retry_delay_seconds: float,
     ) -> None:
         self._logger: logging.Logger = logger
         self._artifacts: ArtifactsStorage = artifacts
@@ -361,19 +354,19 @@ class _ArtifactsLifecycle:
         for attempt in range(1, attempts + 1):
             try:
                 self._logger.info(
-                        f"Worker job_id={self._job_id} status=artifacts_uploading job_status={job_status} "
-                        f"attempt={attempt}/{attempts} path={self._local_root}"
+                    f"Worker job_id={self._job_id} status=artifacts_uploading job_status={job_status} "
+                    f"attempt={attempt}/{attempts} path={self._local_root}"
                 )
                 await self._artifacts.upload_job_artifacts(job_id=self._job_id, local_root=self._local_root)
                 self._logger.info(
-                        f"Worker job_id={self._job_id} status=artifacts_uploaded job_status={job_status} "
-                        f"attempt={attempt}/{attempts} path={self._local_root}"
+                    f"Worker job_id={self._job_id} status=artifacts_uploaded job_status={job_status} "
+                    f"attempt={attempt}/{attempts} path={self._local_root}"
                 )
                 return True
             except Exception as exc:
                 self._logger.error(
-                        f"Worker job_id={self._job_id} status=artifacts_upload_failed job_status={job_status} "
-                        f"attempt={attempt}/{attempts} error={type(exc).__name__}: {exc}"
+                    f"Worker job_id={self._job_id} status=artifacts_upload_failed job_status={job_status} "
+                    f"attempt={attempt}/{attempts} error={type(exc).__name__}: {exc}"
                 )
                 if attempt < attempts and self._upload_retry_delay_seconds > 0.0:
                     await asyncio.sleep(self._upload_retry_delay_seconds)
@@ -393,13 +386,13 @@ class _ArtifactsLifecycle:
         try:
             await asyncio.to_thread(shutil.rmtree, self._local_job_root)
             self._logger.info(
-                    f"Worker job_id={self._job_id} status=artifacts_local_cleaned path={self._local_job_root}"
+                f"Worker job_id={self._job_id} status=artifacts_local_cleaned path={self._local_job_root}"
             )
         except FileNotFoundError:
             return
         except Exception as exc:
             self._logger.warning(
-                    f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed error={type(exc).__name__}: {exc}"
+                f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed error={type(exc).__name__}: {exc}"
             )
 
 
@@ -437,13 +430,13 @@ class _JobExecutor:
             job_root: Path = _resolve_job_artifacts_root(self._settings, job_id)
 
             lifecycle = _ArtifactsLifecycle(
-                    logger=self._logger,
-                    artifacts=self._artifacts,
-                    job_id=job_id,
-                    local_root=resolved.artifacts_root,
-                    local_job_root=job_root,
-                    upload_max_retries=self._settings.artifacts_upload_max_retries,
-                    upload_retry_delay_seconds=self._settings.artifacts_upload_retry_delay_seconds,
+                logger=self._logger,
+                artifacts=self._artifacts,
+                job_id=job_id,
+                local_root=resolved.artifacts_root,
+                local_job_root=job_root,
+                upload_max_retries=self._settings.artifacts_upload_max_retries,
+                upload_retry_delay_seconds=self._settings.artifacts_upload_retry_delay_seconds,
             )
 
             runner: LlamatorRunner = LlamatorRunner(logger=self._logger)
@@ -491,14 +484,14 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
     await redis.ping()
 
     artifacts: ArtifactsStorage = create_artifacts_storage(
-            settings=settings,
-            list_max_keys=1000,
+        settings=settings,
+        list_max_keys=1000,
     )
     if isinstance(artifacts, MinioArtifactsStorage):
         await artifacts.ensure_ready()
 
     logger.info(
-            f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
+        f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
     )
 
     await asyncio.to_thread(_cleanup_expired_local_artifacts, settings, logger)

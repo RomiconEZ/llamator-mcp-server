@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Any
 
-from llamator_mcp_server.domain.models import JobStatus
-from llamator_mcp_server.domain.models import LlamatorJobError
-from llamator_mcp_server.domain.models import LlamatorJobInfo
-from llamator_mcp_server.domain.models import LlamatorJobResult
 from redis.asyncio import Redis
+
+from llamator_mcp_server.domain.models import JobStatus, LlamatorJobError, LlamatorJobInfo, LlamatorJobResult
 
 
 def _utcnow() -> datetime:
@@ -57,14 +54,14 @@ class JobStore:
         """
         now: datetime = _utcnow()
         info: LlamatorJobInfo = LlamatorJobInfo(
-                job_id=job_id,
-                status=JobStatus.QUEUED,
-                created_at=now,
-                updated_at=now,
-                request=request_redacted,
-                result=None,
-                error=None,
-                error_notice=None,
+            job_id=job_id,
+            status=JobStatus.QUEUED,
+            created_at=now,
+            updated_at=now,
+            request=request_redacted,
+            result=None,
+            error=None,
+            error_notice=None,
         )
         await self._set(job_id, info)
         return info
@@ -94,13 +91,13 @@ class JobStore:
         info: LlamatorJobInfo = await self.get(job_id)
         result: LlamatorJobResult = LlamatorJobResult(aggregated=aggregated, finished_at=_utcnow())
         updated: LlamatorJobInfo = info.model_copy(
-                update={
-                    "status": JobStatus.SUCCEEDED,
-                    "updated_at": _utcnow(),
-                    "result": result,
-                    "error": None,
-                    "error_notice": None,
-                }
+            update={
+                "status": JobStatus.SUCCEEDED,
+                "updated_at": _utcnow(),
+                "result": result,
+                "error": None,
+                "error_notice": None,
+            }
         )
         await self._set(job_id, updated)
 
@@ -118,12 +115,12 @@ class JobStore:
         error: LlamatorJobError = LlamatorJobError(error_type=error_type, message=message, occurred_at=_utcnow())
         error_notice: str = _build_error_notice(error_type=error_type, message=message)
         updated: LlamatorJobInfo = info.model_copy(
-                update={
-                    "status": JobStatus.FAILED,
-                    "updated_at": _utcnow(),
-                    "error": error,
-                    "error_notice": error_notice,
-                }
+            update={
+                "status": JobStatus.FAILED,
+                "updated_at": _utcnow(),
+                "error": error,
+                "error_notice": error_notice,
+            }
         )
         await self._set(job_id, updated)
 

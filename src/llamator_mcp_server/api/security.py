@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
+
 from llamator_mcp_server.config.settings import Settings
 
 

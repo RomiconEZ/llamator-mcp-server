@@ -5,9 +5,7 @@ from typing import Any
 
 import pytest
 
-from tests.conftest import McpJsonRpcClient
-from tests.conftest import McpSession
-from tests.conftest import ResponseReporter
+from tests.conftest import McpJsonRpcClient, McpSession, ResponseReporter
 
 
 def _tool_names(tools: list[dict[str, Any]]) -> set[str]:
@@ -107,11 +105,11 @@ def test_mcp_tools_list_contains_llamator_tools(mcp_client: McpJsonRpcClient, mc
 
 
 def test_mcp_create_run_returns_start_testing_result(
-        mcp_client: McpJsonRpcClient,
-        mcp_session: McpSession,
-        minimal_run_request_payload: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
-        reporter: ResponseReporter,
+    mcp_client: McpJsonRpcClient,
+    mcp_session: McpSession,
+    minimal_run_request_payload: dict[str, Any],
+    capsys: pytest.CaptureFixture[str],
+    reporter: ResponseReporter,
 ) -> None:
     tools: list[dict[str, Any]] = mcp_client.list_tools(mcp_session)
     tool_map: dict[str, dict[str, Any]] = {str(t.get("name")): t for t in tools if isinstance(t.get("name"), str)}
@@ -125,7 +123,7 @@ def test_mcp_create_run_returns_start_testing_result(
     created_fallback: dict[str, Any] | None = _extract_text_json_from_content(created_result)
 
     assert (
-            created_struct is not None or created_fallback is not None
+        created_struct is not None or created_fallback is not None
     ), f"Tool result does not contain structuredContent or JSON text content: {created_result!r}"
 
     created_payload: dict[str, Any] = created_struct or created_fallback or {}

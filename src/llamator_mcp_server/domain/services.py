@@ -3,19 +3,20 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from arq.connections import ArqRedis
 
 from llamator_mcp_server.config.settings import Settings
-from llamator_mcp_server.domain.models import BasicTestSpec
-from llamator_mcp_server.domain.models import CustomTestSpec
-from llamator_mcp_server.domain.models import JobStatus
-from llamator_mcp_server.domain.models import LlamatorTestRunRequest
-from llamator_mcp_server.domain.models import OpenAIClientConfig
-from llamator_mcp_server.domain.models import TestParameter
+from llamator_mcp_server.domain.models import (
+    BasicTestSpec,
+    CustomTestSpec,
+    JobStatus,
+    LlamatorTestRunRequest,
+    OpenAIClientConfig,
+    TestParameter,
+)
 from llamator_mcp_server.infra.job_store import JobStore
 
 
@@ -47,9 +48,9 @@ def _redact_client(cfg: OpenAIClientConfig) -> dict[str, Any]:
 
 
 def _redact_request(
-        req: LlamatorTestRunRequest,
-        attack: OpenAIClientConfig,
-        judge: OpenAIClientConfig,
+    req: LlamatorTestRunRequest,
+    attack: OpenAIClientConfig,
+    judge: OpenAIClientConfig,
 ) -> dict[str, Any]:
     """
     Redact secrets from a test run request before persisting.
@@ -90,12 +91,12 @@ def _build_attack_client(settings: Settings) -> OpenAIClientConfig:
     """
     api_key_val: str | None = settings.attack_openai_api_key or None
     return OpenAIClientConfig(
-            api_key=api_key_val,
-            base_url=settings.attack_openai_base_url,
-            model=settings.attack_openai_model,
-            temperature=settings.attack_openai_temperature,
-            system_prompts=settings.attack_openai_system_prompts,
-            model_description=None,
+        api_key=api_key_val,
+        base_url=settings.attack_openai_base_url,
+        model=settings.attack_openai_model,
+        temperature=settings.attack_openai_temperature,
+        system_prompts=settings.attack_openai_system_prompts,
+        model_description=None,
     )
 
 
@@ -109,12 +110,12 @@ def _build_judge_client(settings: Settings) -> OpenAIClientConfig:
     """
     api_key_val: str | None = settings.judge_openai_api_key or None
     return OpenAIClientConfig(
-            api_key=api_key_val,
-            base_url=settings.judge_openai_base_url,
-            model=settings.judge_openai_model,
-            temperature=settings.judge_openai_temperature,
-            system_prompts=settings.judge_openai_system_prompts,
-            model_description=None,
+        api_key=api_key_val,
+        base_url=settings.judge_openai_base_url,
+        model=settings.judge_openai_model,
+        temperature=settings.judge_openai_temperature,
+        system_prompts=settings.judge_openai_system_prompts,
+        model_description=None,
     )
 
 
@@ -196,8 +197,8 @@ def validate_unique_param_names(params: tuple[TestParameter, ...]) -> None:
 
 
 def validate_test_specs(
-        basic_tests: tuple[BasicTestSpec, ...] | None,
-        custom_tests: tuple[CustomTestSpec, ...] | None,
+    basic_tests: tuple[BasicTestSpec, ...] | None,
+    custom_tests: tuple[CustomTestSpec, ...] | None,
 ) -> None:
     """
     Validate basic and custom test specs.

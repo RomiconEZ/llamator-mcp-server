@@ -2,22 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
-from typing import Final
+from typing import Any, Final
 
 from arq.connections import ArqRedis
-from llamator_mcp_server.config.settings import Settings
-from llamator_mcp_server.domain.models import JobStatus
-from llamator_mcp_server.domain.models import LlamatorJobInfo
-from llamator_mcp_server.domain.models import LlamatorTestRunRequest
-from llamator_mcp_server.domain.ports.artifacts_storage import ARTIFACTS_ARCHIVE_NAME
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorageError
-from llamator_mcp_server.domain.services import TestRunService
-from llamator_mcp_server.domain.services import validate_test_specs
-from llamator_mcp_server.infra.job_store import JobStore
 from mcp.server.fastmcp import FastMCP
 from redis.asyncio import Redis
+
+from llamator_mcp_server.config.settings import Settings
+from llamator_mcp_server.domain.models import JobStatus, LlamatorJobInfo, LlamatorTestRunRequest
+from llamator_mcp_server.domain.ports.artifacts_storage import (
+    ARTIFACTS_ARCHIVE_NAME,
+    ArtifactsStorage,
+    ArtifactsStorageError,
+)
+from llamator_mcp_server.domain.services import TestRunService, validate_test_specs
+from llamator_mcp_server.infra.job_store import JobStore
 
 
 def _is_terminal_status(status: JobStatus) -> bool:
@@ -52,9 +51,9 @@ def _safe_log_request(req: LlamatorTestRunRequest) -> dict[str, Any]:
 
 
 async def _await_job_completion(
-        store: JobStore,
-        job_id: str,
-        timeout_seconds: int,
+    store: JobStore,
+    job_id: str,
+    timeout_seconds: int,
 ) -> LlamatorJobInfo:
     """
     Дождаться завершения задания (SUCCEEDED/FAILED), опрашивая JobStore.
@@ -105,9 +104,9 @@ def _extract_aggregated_or_empty(info: LlamatorJobInfo) -> dict[str, dict[str, i
 
 
 async def _try_get_artifacts_download_url(
-        artifacts: ArtifactsStorage,
-        job_id: str,
-        expires_seconds: int,
+    artifacts: ArtifactsStorage,
+    job_id: str,
+    expires_seconds: int,
 ) -> str | None:
     """
     Resolve artifacts archive download URL.
@@ -119,9 +118,9 @@ async def _try_get_artifacts_download_url(
     """
     try:
         link = await artifacts.get_download_link(
-                job_id=job_id,
-                rel_path=ARTIFACTS_ARCHIVE_NAME,
-                expires_seconds=expires_seconds,
+            job_id=job_id,
+            rel_path=ARTIFACTS_ARCHIVE_NAME,
+            expires_seconds=expires_seconds,
         )
     except (FileNotFoundError, ValueError):
         return None
@@ -131,11 +130,11 @@ async def _try_get_artifacts_download_url(
 
 
 def build_mcp(
-        settings: Settings,
-        redis: Redis,
-        arq: ArqRedis,
-        logger: logging.Logger,
-        artifacts: ArtifactsStorage,
+    settings: Settings,
+    redis: Redis,
+    arq: ArqRedis,
+    logger: logging.Logger,
+    artifacts: ArtifactsStorage,
 ) -> FastMCP:
     """
     Построить MCP сервер с инструментами для запуска и мониторинга LLAMATOR.
@@ -147,10 +146,10 @@ def build_mcp(
     :return: Экземпляр FastMCP.
     """
     mcp: FastMCP = FastMCP(
-            name="llamator-mcp-server",
-            stateless_http=True,
-            streamable_http_path=settings.mcp_streamable_http_path,
-            json_response=True,
+        name="llamator-mcp-server",
+        stateless_http=True,
+        streamable_http_path=settings.mcp_streamable_http_path,
+        json_response=True,
     )
 
     store: JobStore = JobStore(redis=redis, ttl_seconds=settings.job_ttl_seconds)
@@ -180,16 +179,16 @@ def build_mcp(
 
         logger.info(f"Awaiting LLAMATOR job completion job_id={submitted.job_id}")
         info: LlamatorJobInfo = await _await_job_completion(
-                store=store,
-                job_id=submitted.job_id,
-                timeout_seconds=settings.run_timeout_seconds,
+            store=store,
+            job_id=submitted.job_id,
+            timeout_seconds=settings.run_timeout_seconds,
         )
 
         aggregated: dict[str, dict[str, int]] = _extract_aggregated_or_empty(info)
         artifacts_url: str | None = await _try_get_artifacts_download_url(
-                artifacts=artifacts,
-                job_id=submitted.job_id,
-                expires_seconds=settings.artifacts_presign_expires_seconds,
+            artifacts=artifacts,
+            job_id=submitted.job_id,
+            expires_seconds=settings.artifacts_presign_expires_seconds,
         )
         error_notice: str | None = info.error_notice if info.error_notice is not None else _build_error_notice(info)
 
@@ -218,9 +217,9 @@ def build_mcp(
         info: LlamatorJobInfo = await store.get(job_id)
         aggregated: dict[str, dict[str, int]] = _extract_aggregated_or_empty(info)
         artifacts_url: str | None = await _try_get_artifacts_download_url(
-                artifacts=artifacts,
-                job_id=job_id,
-                expires_seconds=settings.artifacts_presign_expires_seconds,
+            artifacts=artifacts,
+            job_id=job_id,
+            expires_seconds=settings.artifacts_presign_expires_seconds,
         )
         error_notice: str | None = info.error_notice if info.error_notice is not None else _build_error_notice(info)
 

@@ -8,17 +8,11 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from typing import Final
-from typing import Literal
-from typing import Mapping
+from typing import Any, Final, Literal, Mapping
 
 import pytest
 from icecream import ic
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
-from pydantic import field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DEFAULT_ENV_FILE_NAME: Final[str] = ".env.test"
 ENV_PREFIX: Final[str] = "LLAMATOR_MCP_TEST_"
@@ -282,13 +276,13 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
 
     def redirect_request(
-            self,
-            req: urllib.request.Request,
-            fp: Any,
-            code: int,
-            msg: str,
-            headers: Any,
-            newurl: str,
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
     ) -> Any:  # noqa: ANN401
         return None
 
@@ -697,13 +691,13 @@ def _load_test_config() -> IntegrationTestConfig:
     mcp_protocol_version: str = _get_env_required(f"{ENV_PREFIX}MCP_PROTOCOL_VERSION")
 
     return IntegrationTestConfig(
-            base_url=base_url,
-            mcp_path=mcp_path,
-            api_key=api_key,
-            http_timeout_s=http_timeout_s,
-            ready_timeout_s=ready_timeout_s,
-            ready_interval_s=ready_interval_s,
-            mcp_protocol_version=mcp_protocol_version,
+        base_url=base_url,
+        mcp_path=mcp_path,
+        api_key=api_key,
+        http_timeout_s=http_timeout_s,
+        ready_timeout_s=ready_timeout_s,
+        ready_interval_s=ready_interval_s,
+        mcp_protocol_version=mcp_protocol_version,
     )
 
 
@@ -721,13 +715,13 @@ def _load_run_request_env_config() -> RunRequestEnvConfig:
     enable_reports: bool = _get_env_bool(f"{ENV_PREFIX}ENABLE_REPORTS")
 
     return RunRequestEnvConfig(
-            tested_kind=tested_kind,  # type: ignore[arg-type]
-            tested_base_url=tested_base_url,
-            tested_model=tested_model,
-            tested_api_key=tested_api_key,
-            preset_name=preset_name,
-            num_threads=num_threads,
-            enable_reports=enable_reports,
+        tested_kind=tested_kind,  # type: ignore[arg-type]
+        tested_base_url=tested_base_url,
+        tested_model=tested_model,
+        tested_api_key=tested_api_key,
+        preset_name=preset_name,
+        num_threads=num_threads,
+        enable_reports=enable_reports,
     )
 
 
@@ -839,9 +833,9 @@ def http_headers(it_config: IntegrationTestConfig) -> dict[str, str]:
 
 @pytest.fixture()
 def mcp_client(
-        http_client: HttpJsonClient,
-        it_config: IntegrationTestConfig,
-        reporter: ResponseReporter,
+    http_client: HttpJsonClient,
+    it_config: IntegrationTestConfig,
+    reporter: ResponseReporter,
 ) -> McpJsonRpcClient:
     """
     Provide MCP JSON-RPC client.

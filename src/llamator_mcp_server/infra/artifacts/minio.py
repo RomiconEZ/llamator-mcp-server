@@ -5,23 +5,21 @@ import os
 import tempfile
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timedelta
-from datetime import timezone
-from pathlib import Path
-from pathlib import PurePosixPath
+from datetime import datetime, timedelta, timezone
+from pathlib import Path, PurePosixPath
 from typing import Iterable
-from urllib.parse import ParseResult
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from minio import Minio
 from minio.error import S3Error
 
-from llamator_mcp_server.domain.ports.artifacts_storage import ARTIFACTS_ARCHIVE_NAME
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactDownloadLink
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactFileRecord
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorageError
+from llamator_mcp_server.domain.ports.artifacts_storage import (
+    ARTIFACTS_ARCHIVE_NAME,
+    ArtifactDownloadLink,
+    ArtifactFileRecord,
+    ArtifactsStorage,
+    ArtifactsStorageError,
+)
 
 
 def _utc_ts(dt: datetime | None) -> float:
@@ -169,10 +167,10 @@ class MinioArtifactsStorage(ArtifactsStorage):
         self._retention_seconds: int = int(retention_seconds)
 
         self._client: Minio = Minio(
-                endpoint=parsed.netloc,
-                access_key=str(cfg.access_key_id),
-                secret_key=str(cfg.secret_access_key),
-                secure=bool(cfg.secure),
+            endpoint=parsed.netloc,
+            access_key=str(cfg.access_key_id),
+            secret_key=str(cfg.secret_access_key),
+            secure=bool(cfg.secure),
         )
 
         if public_parsed is None:
@@ -199,11 +197,11 @@ class MinioArtifactsStorage(ArtifactsStorage):
                 raise ArtifactsStorageError(f"MinIO get_region failed bucket={self._bucket!r}") from e
 
             self._presign_client = Minio(
-                    endpoint=self._presign_endpoint,
-                    access_key=self._presign_access_key,
-                    secret_key=self._presign_secret_key,
-                    secure=self._presign_secure,
-                    region=region,
+                endpoint=self._presign_endpoint,
+                access_key=self._presign_access_key,
+                secret_key=self._presign_secret_key,
+                secure=self._presign_secure,
+                region=region,
             )
             return self._presign_client
 
@@ -237,7 +235,7 @@ class MinioArtifactsStorage(ArtifactsStorage):
                     name: str = str(getattr(obj, "object_name", "") or "")
                     if not name.startswith(prefix):
                         continue
-                    rel: str = name[len(prefix):]
+                    rel: str = name[len(prefix) :]
                     if not rel:
                         continue
 
@@ -291,9 +289,9 @@ class MinioArtifactsStorage(ArtifactsStorage):
 
             try:
                 url: str = presign_client.presigned_get_object(
-                        self._bucket,
-                        key,
-                        expires=timedelta(seconds=expires_seconds),
+                    self._bucket,
+                    key,
+                    expires=timedelta(seconds=expires_seconds),
                 )
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO presigned_get_object failed key={key!r}") from e

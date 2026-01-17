@@ -1,27 +1,28 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter
-from fastapi import Depends
-from fastapi import HTTPException
-from fastapi import Security
+from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
-from llamator_mcp_server.config.settings import Settings
-from llamator_mcp_server.domain.models import ArtifactDownloadResponse
-from llamator_mcp_server.domain.models import ArtifactFileInfo
-from llamator_mcp_server.domain.models import ArtifactsListResponse
-from llamator_mcp_server.domain.models import HealthResponse
-from llamator_mcp_server.domain.models import LlamatorJobInfo
-from llamator_mcp_server.domain.models import LlamatorTestRunRequest
-from llamator_mcp_server.domain.models import LlamatorTestRunResponse
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactDownloadLink
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactFileRecord
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorageError
-from llamator_mcp_server.domain.services import TestRunService
-from llamator_mcp_server.domain.services import validate_test_specs
-from llamator_mcp_server.infra.job_store import JobStore
 from redis.asyncio import Redis
+
+from llamator_mcp_server.config.settings import Settings
+from llamator_mcp_server.domain.models import (
+    ArtifactDownloadResponse,
+    ArtifactFileInfo,
+    ArtifactsListResponse,
+    HealthResponse,
+    LlamatorJobInfo,
+    LlamatorTestRunRequest,
+    LlamatorTestRunResponse,
+)
+from llamator_mcp_server.domain.ports.artifacts_storage import (
+    ArtifactDownloadLink,
+    ArtifactFileRecord,
+    ArtifactsStorage,
+    ArtifactsStorageError,
+)
+from llamator_mcp_server.domain.services import TestRunService, validate_test_specs
+from llamator_mcp_server.infra.job_store import JobStore
 
 from .security import require_api_key
 
@@ -40,14 +41,15 @@ class _ApiKeyDependency:
         self._settings: Settings = settings
 
     async def __call__(
-            self,
-            x_api_key: str | None = Security(
-                    APIKeyHeader(
-                            name="X-API-Key",
-                            auto_error=False,
-                            scheme_name="McpApiKey",
-                    )
-            ),
+        self,
+        x_api_key: str
+        | None = Security(
+            APIKeyHeader(
+                name="X-API-Key",
+                auto_error=False,
+                scheme_name="McpApiKey",
+            )
+        ),
     ) -> None:
         """
         Validate the API key provided via the X-API-Key header.
@@ -60,11 +62,11 @@ class _ApiKeyDependency:
 
 
 def build_router(
-        settings: Settings,
-        redis: Redis,
-        arq: Any,
-        logger: logging.Logger,
-        artifacts: ArtifactsStorage,
+    settings: Settings,
+    redis: Redis,
+    arq: Any,
+    logger: logging.Logger,
+    artifacts: ArtifactsStorage,
 ) -> APIRouter:
     """
     Build HTTP API router.
@@ -152,14 +154,14 @@ def build_router(
         return ArtifactsListResponse(job_id=job_id, files=parsed_files)
 
     @protected_router.get(
-            "/v1/tests/runs/{job_id}/artifacts/{path:path}",
-            response_model=ArtifactDownloadResponse,
-            responses={
-                200: {"description": "Artifact download link."},
-                400: {"description": "Invalid path."},
-                404: {"description": "Job or file not found."},
-                502: {"description": "Artifacts backend error."},
-            },
+        "/v1/tests/runs/{job_id}/artifacts/{path:path}",
+        response_model=ArtifactDownloadResponse,
+        responses={
+            200: {"description": "Artifact download link."},
+            400: {"description": "Invalid path."},
+            404: {"description": "Job or file not found."},
+            502: {"description": "Artifacts backend error."},
+        },
     )
     async def download_artifact(job_id: str, path: str) -> ArtifactDownloadResponse:
         """
@@ -180,18 +182,16 @@ def build_router(
 
         try:
             link: ArtifactDownloadLink = await artifacts.get_download_link(
-                    job_id=job_id,
-                    rel_path=path,
-                    expires_seconds=settings.artifacts_presign_expires_seconds,
+                job_id=job_id,
+                rel_path=path,
+                expires_seconds=settings.artifacts_presign_expires_seconds,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail="Invalid path") from e
         except FileNotFoundError as e:
             raise HTTPException(status_code=404, detail="File not found") from e
         except ArtifactsStorageError as e:
-            logger.error(
-                    f"Artifacts download resolve failed job_id={job_id} path={path} error={type(e).__name__}: {e}"
-            )
+            logger.error(f"Artifacts download resolve failed job_id={job_id} path={path} error={type(e).__name__}: {e}")
             raise HTTPException(status_code=502, detail="Artifacts backend error") from e
 
         return ArtifactDownloadResponse(job_id=job_id, path=path, download_url=link.url)
